@@ -63,8 +63,10 @@ fourButtonsToARCommand :: [Bool] -> ARCommand
 fourButtonsToARCommand [b1,b2,b3,b4,b5,b6,b7,b8]	= ARCCustom (buttonsToTristate (b1, b2)) (buttonsToTristate (b3, b4)) (buttonsToTristate (b5, b6)) (buttonsToTristate (b7, b8))
 fourButtonsToARCommand _							= error "Need 8 bools for 4 buttons"
 
-nineButtons (False:bs)	= fourButtonsToARCommand bs
-nineButtons (True:_)	= Down
+elevenButtons (True:_)					= Down
+elevenButtons (False:True:_)			= ToggleEmergency
+elevenButtons (False:False:True:_)		= Up
+elevenButtons (False:False:False:bs)	= fourButtonsToARCommand bs
 
 data ARCommand = 
 	  Down
