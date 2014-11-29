@@ -7,7 +7,7 @@ Ruthlessly stolen from Joe Nash: https://github.com/jdNash/haskopter/blob/master
 
 import Network.Socket
 import System.IO
-import Control.Monad (forever, liftM, replicateM)
+import Control.Monad (forever, liftM, replicateM_)
 import Control.Monad.Loops (whileM_)
 import FRP.Yampa as Yampa
 import Data.List (intercalate) 
