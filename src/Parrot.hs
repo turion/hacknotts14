@@ -1,4 +1,5 @@
-module Main where
+{-# LANGUAGE Arrows #-}
+module Parrot where
 
 {-
 Ruthlessly stolen from Joe Nash: https://github.com/jdNash/haskopter/blob/master/src/Client.hs
@@ -6,8 +7,10 @@ Ruthlessly stolen from Joe Nash: https://github.com/jdNash/haskopter/blob/master
 
 import Network.Socket
 import System.IO
-import Control.Monad (forever, liftM)
+import Control.Monad (forever, liftM, replicateM)
 import Control.Monad.Loops (whileM_)
+import FRP.Yampa as Yampa
+import Data.List (intercalate) 
 
 port = 5556
 navport = 5554
@@ -26,12 +29,38 @@ send two true commands to true data
 -}
 
 
-data ARRawCommand = Ref String | PCMD String
+data ARRawCommand = Ref String | PCMD String | FTrim
 	deriving Show
 
 renderARRawCommand :: ARRawCommand -> Int -> String
 renderARRawCommand (Ref s) i = "AT*REF=" ++ show i ++ "," ++ s ++ "\r"
-renderARRawCommand (PCMD s) i = "AT*PCMD=" ++ show i ++ "," ++ s ++ "\r"
+renderARRawCommand (PCMD s) i = "AT*PCMD=" ++ show i ++ ",1," ++ s ++ "\r"
+renderARRawCommand FTrim i = "AT*FTRIM=" ++ show i ++ "\r"
+
+
+data Tristate = Zero | Plus | Minus
+	deriving Show
+tristateToObscureNumber :: Tristate -> String
+tristateToObscureNumber Zero = "0"
+tristateToObscureNumber Plus = "1036831949"
+tristateToObscureNumber Minus = "-1110651699"
+
+tristrateString = (intercalate ",") . (map tristateToObscureNumber)
+
+buttonsToTristate :: (Bool, Bool) -> Tristate
+buttonsToTristate (False, False) = Zero
+buttonsToTristate (True, True) = Zero
+buttonsToTristate (True, False) = Plus
+buttonsToTristate (False, True) = Minus
+
+
+firstTwoButtonsToTristate :: [Bool] -> Tristate
+firstTwoButtonsToTristate [b1,b2]	= buttonsToTristate (b1, b2)
+firstTwoButtonsToTristate _			= error "Must be two bools for buttons"
+
+fourButtonsToARCommand :: [Bool] -> ARCommand
+fourButtonsToARCommand [b1,b2,b3,b4,b5,b6,b7,b8]	= ARCCustom (buttonsToTristate (b1, b2)) (buttonsToTristate (b3, b4)) (buttonsToTristate (b5, b6)) (buttonsToTristate (b7, b8))
+fourButtonsToARCommand _							= error "Need 8 bools for 4 buttons"
 
 data ARCommand = 
 	  Down
@@ -46,33 +75,37 @@ data ARCommand =
 	| ARCyt
 	| ARCrt
 	| ARCre
+	| ARCCustom Tristate Tristate Tristate Tristate -- might not work for yaw
+	| Trim
 	deriving Show
 
 
 rawCommand :: ARCommand -> ARRawCommand
-rawCommand Down				= Ref "290717696"
-rawCommand ToggleEmergency	= Ref "290717952"
-rawCommand Up				= Ref "290718208"
-rawCommand ARCh				= PCMD "1,0,0,0,0"
-rawCommand ARCgh			= PCMD "1,0,0,1036831949,0"
-rawCommand ARCgf			= PCMD "1,0,0,-1110651699,0"
-rawCommand ARCp				= PCMD "1,1036831949,0,0,0"
-rawCommand ARCpo			= PCMD "1,-1110651699,0,0,0"
-rawCommand ARCyu			= PCMD "1,0,0,0,1056964608"
-rawCommand ARCyt			= PCMD "1,0,0,0,-3204448256"
-rawCommand ARCrt			= PCMD "1,0,1036831949,0,0"
-rawCommand ARCre			= PCMD "1,0,-1110651699,0,0"
+rawCommand Down						= Ref "290717696"
+rawCommand ToggleEmergency			= Ref "290717952"
+rawCommand Up						= Ref "290718208"
+rawCommand ARCh						= PCMD "0,0,0,0"
+rawCommand ARCgh					= PCMD "0,0,1036831949,0"
+rawCommand ARCgf					= PCMD "0,0,-1110651699,0"
+rawCommand ARCp						= PCMD "1036831949,0,0,0"
+rawCommand ARCpo					= PCMD "-1110651699,0,0,0"
+rawCommand ARCyu					= PCMD "0,0,0,1056964608" -- ?
+rawCommand ARCyt					= PCMD "0,0,0,-3204448256"
+rawCommand ARCrt					= PCMD "0,1036831949,0,0"
+rawCommand ARCre					= PCMD "0,-1110651699,0,0"
+rawCommand (ARCCustom t1 t2 t3 t4)	= PCMD (tristrateString [t1, t2, t3, t4])
+rawCommand Trim						= FTrim
 
 renderARCommand :: ARCommand -> Int -> String
 renderARCommand command i = renderARRawCommand (rawCommand command) i
 
-actCommand :: ARCommand -> Socket -> HostAddress -> Int -> IO ()
-actCommand command s h i = do
+actCommand :: ARCommand -> ARDroneController -> Int -> IO ()
+actCommand command (ARDroneController s h) i = do
 	putStrLn $ "Sending " ++ show command ++ " (" ++ (renderARCommand command i) ++ ")"
 	arAction (renderARCommand command i) s h
 
-consoleCommand :: Socket -> HostAddress ->Int -> IO ()
-consoleCommand s h i = do
+consoleCommand :: ARDroneController -> Int -> IO ()
+consoleCommand controller i = do
 	msg <- getLine
 	case lookup msg [
 			("d",	Down),
@@ -85,27 +118,31 @@ consoleCommand s h i = do
 			("po",	ARCpo),
 			("yu",	ARCyu), -- yaw
 			("yt",	ARCyt),
-			("rt",	ARCrt), -- roll!
+			("rt",	ARCrt), -- roll! ? rather pitch
 			("re",	ARCre)
 		] of
-		Just command	-> actCommand command s h i
+		Just command	-> actCommand command controller i
 		Nothing			-> putStrLn $ "Unrecognised input: " ++ msg
 
+data ARDroneController = ARDroneController { ardroneSocket :: Socket, ardroneHostAddress :: HostAddress }
 
-main = withSocketsDo $ do
+initDrone :: IO ARDroneController
+initDrone = do
 	s <- socket AF_INET Datagram defaultProtocol
 	hostAddr <- inet_addr host
-	sendTo s "AT*CONFIG=1,\"control:altitude_max\",\"2000\"" (SockAddrInet port hostAddr)
-	sendTo s "AT*CONFIG=1,\"control:altitude_max\",\"2000\"" (SockAddrInet port hostAddr)  
-	mapM_ (consoleCommand s hostAddr) [1..]
-	sClose s
+	replicateM 2 $ sendTo s "AT*CONFIG=1,\"control:altitude_max\",\"2000\"" (SockAddrInet port hostAddr)
+	return $ ARDroneController s hostAddr
+
+main = withSocketsDo $ do
+	controller <- initDrone
+	mapM_ (consoleCommand controller) [1..] -- successive number
+	sClose $ ardroneSocket controller
 	return ()
 
 arAction msg s hostAddr = whileM_ (liftM not $ hReady stdin) $ do
                         sendTo s msg (SockAddrInet port hostAddr)
                         sendTo s msg (SockAddrInet port hostAddr)
 
---arMessage msg ref
 
 {-port = "5554"
 
