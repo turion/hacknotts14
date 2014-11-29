@@ -154,7 +154,7 @@ test = do
 arActionFlood msg controller = whileM_ (liftM not $ hReady stdin) $ do
                         arAction msg controller
                         arAction msg controller
-arAction msg (ARDroneController s hostAddr) = sendTo s (msg ++ "\r") (SockAddrInet port hostAddr)
+arAction msg (ARDroneController s hostAddr) = replicateM_ 5 $ sendTo s (msg ++ "\r") (SockAddrInet port hostAddr)
 
 {-port = "5554"
 
