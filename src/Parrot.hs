@@ -1,5 +1,5 @@
 {-# LANGUAGE Arrows #-}
---module Parrot where
+module Parrot where
 
 {-
 Ruthlessly stolen from Joe Nash: https://github.com/jdNash/haskopter/blob/master/src/Client.hs
@@ -63,6 +63,9 @@ fourButtonsToARCommand :: [Bool] -> ARCommand
 fourButtonsToARCommand [b1,b2,b3,b4,b5,b6,b7,b8]	= ARCCustom (buttonsToTristate (b1, b2)) (buttonsToTristate (b3, b4)) (buttonsToTristate (b5, b6)) (buttonsToTristate (b7, b8))
 fourButtonsToARCommand _							= error "Need 8 bools for 4 buttons"
 
+nineButtons (False:bs)	= fourButtonsToARCommand bs
+nineButtons (True:_)	= Down
+
 data ARCommand = 
 	  Down
 	| ToggleEmergency
@@ -101,9 +104,9 @@ renderARCommand :: ARCommand -> Int -> String
 renderARCommand command i = renderARRawCommand (rawCommand command) i
 
 actCommand :: ARCommand -> ARDroneController -> Int -> IO ()
-actCommand command (ARDroneController s h) i = do
+actCommand command controller i = do
 	putStrLn $ "Sending " ++ show command ++ " (" ++ (renderARCommand command i) ++ ")"
-	arAction (renderARCommand command i ++ "\r") s h
+	arActionFlood (renderARCommand command i) controller
 
 consoleCommand :: ARDroneController -> Int -> IO ()
 consoleCommand controller i = do
@@ -137,17 +140,21 @@ initDrone = do
 	actCommand Trim controller 2
 	return controller
 
+launch controller i = do
+	arAction (renderARCommand Trim i) controller
+	arAction (renderARCommand Up (i+1)) controller
+
 --main = withSocketsDo $ do -- need for windows
-main = do
+test = do
 	controller <- initDrone
 	mapM_ (consoleCommand controller) [3..] -- successive number
 	sClose $ ardroneSocket controller
 	return ()
 
-arAction msg s hostAddr = whileM_ (liftM not $ hReady stdin) $ do
-                        sendTo s msg (SockAddrInet port hostAddr)
-                        sendTo s msg (SockAddrInet port hostAddr)
-
+arActionFlood msg controller = whileM_ (liftM not $ hReady stdin) $ do
+                        arAction msg controller
+                        arAction msg controller
+arAction msg (ARDroneController s hostAddr) = sendTo s (msg ++ "\r") (SockAddrInet port hostAddr)
 
 {-port = "5554"
 
