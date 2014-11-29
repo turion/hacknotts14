@@ -1,5 +1,5 @@
 {-# LANGUAGE Arrows #-}
-module Parrot where
+--module Parrot where
 
 {-
 Ruthlessly stolen from Joe Nash: https://github.com/jdNash/haskopter/blob/master/src/Client.hs
@@ -33,9 +33,9 @@ data ARRawCommand = Ref String | PCMD String | FTrim
 	deriving Show
 
 renderARRawCommand :: ARRawCommand -> Int -> String
-renderARRawCommand (Ref s) i = "AT*REF=" ++ show i ++ "," ++ s ++ "\r"
-renderARRawCommand (PCMD s) i = "AT*PCMD=" ++ show i ++ ",1," ++ s ++ "\r"
-renderARRawCommand FTrim i = "AT*FTRIM=" ++ show i ++ "\r"
+renderARRawCommand (Ref s) i = "AT*REF=" ++ show i ++ "," ++ s
+renderARRawCommand (PCMD s) i = "AT*PCMD=" ++ show i ++ ",1," ++ s
+renderARRawCommand FTrim i = "AT*FTRIM=" ++ show i
 
 
 data Tristate = Zero | Plus | Minus
@@ -102,7 +102,7 @@ renderARCommand command i = renderARRawCommand (rawCommand command) i
 actCommand :: ARCommand -> ARDroneController -> Int -> IO ()
 actCommand command (ARDroneController s h) i = do
 	putStrLn $ "Sending " ++ show command ++ " (" ++ (renderARCommand command i) ++ ")"
-	arAction (renderARCommand command i) s h
+	arAction (renderARCommand command i ++ "\r") s h
 
 consoleCommand :: ARDroneController -> Int -> IO ()
 consoleCommand controller i = do
@@ -119,7 +119,8 @@ consoleCommand controller i = do
 			("yu",	ARCyu), -- yaw
 			("yt",	ARCyt),
 			("rt",	ARCrt), -- roll! ? rather pitch
-			("re",	ARCre)
+			("re",	ARCre),
+			("t",	Trim)
 		] of
 		Just command	-> actCommand command controller i
 		Nothing			-> putStrLn $ "Unrecognised input: " ++ msg
@@ -130,12 +131,13 @@ initDrone :: IO ARDroneController
 initDrone = do
 	s <- socket AF_INET Datagram defaultProtocol
 	hostAddr <- inet_addr host
-	replicateM 2 $ sendTo s "AT*CONFIG=1,\"control:altitude_max\",\"2000\"" (SockAddrInet port hostAddr)
+	sendTo s "AT*CONFIG=1,\"control:altitude_max\",\"2000\"" (SockAddrInet port hostAddr)
 	return $ ARDroneController s hostAddr
 
 main = withSocketsDo $ do
 	controller <- initDrone
-	mapM_ (consoleCommand controller) [1..] -- successive number
+	actCommand Trim controller 2
+	mapM_ (consoleCommand controller) [3..] -- successive number
 	sClose $ ardroneSocket controller
 	return ()
 
