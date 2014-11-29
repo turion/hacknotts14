@@ -53,10 +53,11 @@ buttonsToTristate (True, True) = Zero
 buttonsToTristate (True, False) = Plus
 buttonsToTristate (False, True) = Minus
 
-
+{-
 firstTwoButtonsToTristate :: [Bool] -> Tristate
 firstTwoButtonsToTristate [b1,b2]	= buttonsToTristate (b1, b2)
 firstTwoButtonsToTristate _			= error "Must be two bools for buttons"
+-}
 
 fourButtonsToARCommand :: [Bool] -> ARCommand
 fourButtonsToARCommand [b1,b2,b3,b4,b5,b6,b7,b8]	= ARCCustom (buttonsToTristate (b1, b2)) (buttonsToTristate (b3, b4)) (buttonsToTristate (b5, b6)) (buttonsToTristate (b7, b8))
@@ -132,11 +133,13 @@ initDrone = do
 	s <- socket AF_INET Datagram defaultProtocol
 	hostAddr <- inet_addr host
 	sendTo s "AT*CONFIG=1,\"control:altitude_max\",\"2000\"" (SockAddrInet port hostAddr)
-	return $ ARDroneController s hostAddr
-
-main = withSocketsDo $ do
-	controller <- initDrone
+	let controller = ARDroneController s hostAddr
 	actCommand Trim controller 2
+	return controller
+
+--main = withSocketsDo $ do -- need for windows
+main = do
+	controller <- initDrone
 	mapM_ (consoleCommand controller) [3..] -- successive number
 	sClose $ ardroneSocket controller
 	return ()
