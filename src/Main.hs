@@ -5,25 +5,17 @@ import Control.Monad.IO.Class
 import Control.Concurrent.MVar
 import System.Hardware.Arduino as Arduino
 import FRP.Yampa as Yampa
-import System.Hardware.Arduino.SamplePrograms.Blink
-
---main = withArduino True "/dev/ttyUSB0" $ do
---           let led = digital 13
---           setPinMode led OUTPUT
---           forever $ do digitalWrite led True
---                        Arduino.delay 1000
---                        digitalWrite led False
---                        Arduino.delay 1000
 
 main = do
-  input <- defaultArduinoInput
+  input  <- defaultArduinoInput
   output <- defaultArduinoOutput
-  thrd <- arduinoThread input output
+  thrd   <- arduinoThread input output
   reactimate (readMVar input)
              (\_ -> do i <- readMVar input
+                       putStrLn $ "Yampa input: " ++ show i
                        return $ (1, Just i))
              (\_ o -> do swapMVar output o
-                         putStrLn $ "Yampa: " ++ show o
+                         -- putStrLn $ "Yampa output: " ++ show o
                          threadDelay 1000
                          return False)
              sf
@@ -36,7 +28,7 @@ sf = proc _ -> do
  where timeToFlick = 500 
 
 data ArduinoInput = ArduinoInput
-  { }
+  {  buttons :: [Bool] }
  deriving Show
 
 data ArduinoOutput = ArduinoOutput
@@ -45,7 +37,10 @@ data ArduinoOutput = ArduinoOutput
  deriving Show
 
 defaultArduinoInput :: IO (MVar ArduinoInput)
-defaultArduinoInput = newMVar ArduinoInput
+defaultArduinoInput = newMVar $ ArduinoInput
+  {  buttons = map (const False) buttonIndices }
+
+buttonIndices = [2..10]
 
 defaultArduinoOutput :: IO (MVar ArduinoOutput)
 defaultArduinoOutput = newMVar $ 
@@ -58,15 +53,18 @@ arduinoThread :: ArduinoIRef -> ArduinoORef -> IO ThreadId
 arduinoThread refI refO = forkIO $
   withArduino True "/dev/ttyUSB0" $ do
     let led_13 = digital 13
+        digButtons = map digital buttonIndices
     setPinMode led_13 OUTPUT
+    mapM_ (`setPinMode` INPUT) digButtons
     forever $ do
       output <- liftIO $ readMVar refO
-      liftIO $ print output
+      -- liftIO $ print output
 
       digitalWrite led_13 (led13 output)
       ---- Put outputs
 
       -- Read Inputs
-      let input' = ArduinoInput
+      bInputs <- mapM digitalRead digButtons
+      let input' = ArduinoInput bInputs
       
       void $ liftIO $ swapMVar refI input'
