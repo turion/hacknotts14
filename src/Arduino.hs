@@ -6,10 +6,11 @@ import Control.Monad.IO.Class
 import Control.Concurrent.MVar
 import System.Hardware.Arduino as Arduino
 
-
 data ArduinoInput = ArduinoInput
   {  buttons :: [Bool] }
  deriving Show
+
+buttonIndices = [2..12]
 
 data ArduinoOutput = ArduinoOutput
   { led13 :: Bool
@@ -20,8 +21,6 @@ defaultArduinoInput :: IO (MVar ArduinoInput)
 defaultArduinoInput = newMVar $ ArduinoInput
   {  buttons = map (const False) buttonIndices }
 
-buttonIndices = [2..12]
-
 defaultArduinoOutput :: IO (MVar ArduinoOutput)
 defaultArduinoOutput = newMVar $ 
   ArduinoOutput { led13 = False }
@@ -29,6 +28,8 @@ defaultArduinoOutput = newMVar $
 type ArduinoIRef = MVar ArduinoInput
 type ArduinoORef = MVar ArduinoOutput
 
+-- | This thread connects to the arduino and continuously
+-- polls the buttons and pushes the led values.
 arduinoThread :: ArduinoIRef -> ArduinoORef -> IO ThreadId
 arduinoThread refI refO = forkIO $
   withArduino True "/dev/ttyUSB0" $ do
