@@ -42,8 +42,8 @@ data Tristate = Zero | Plus | Minus
 	deriving Show
 tristateToObscureNumber :: Tristate -> String
 tristateToObscureNumber Zero = "0"
-tristateToObscureNumber Plus = "1036831949"
-tristateToObscureNumber Minus = "-1110651699"
+tristateToObscureNumber Plus = "133169152" --"1036831949" -- Hopefully that's 1.0 instead of whatever small number
+tristateToObscureNumber Minus = "-1082130432" --"-1110651699"
 
 tristrateString = (intercalate ",") . (map tristateToObscureNumber)
 
