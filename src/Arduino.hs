@@ -20,7 +20,7 @@ defaultArduinoInput :: IO (MVar ArduinoInput)
 defaultArduinoInput = newMVar $ ArduinoInput
   {  buttons = map (const False) buttonIndices }
 
-buttonIndices = [2..10]
+buttonIndices = [2..12]
 
 defaultArduinoOutput :: IO (MVar ArduinoOutput)
 defaultArduinoOutput = newMVar $ 

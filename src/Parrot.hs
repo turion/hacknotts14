@@ -108,7 +108,7 @@ renderARCommand command i = renderARRawCommand (rawCommand command) i
 actCommand :: ARCommand -> ARDroneController -> Int -> IO ()
 actCommand command controller i = do
 	putStrLn $ "Sending " ++ show command ++ " (" ++ (renderARCommand command i) ++ ")"
-	arActionFlood (renderARCommand command i) controller
+	arAction (renderARCommand command i) controller
 
 consoleCommand :: ARDroneController -> Int -> IO ()
 consoleCommand controller i = do
