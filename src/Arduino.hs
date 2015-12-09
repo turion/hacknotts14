@@ -10,10 +10,11 @@ data ArduinoInput = ArduinoInput
   {  buttons :: [Bool] }
  deriving Show
 
-buttonIndices = [2..12]
+buttonIndices = [2..8] ++ [10..12]
 
 data ArduinoOutput = ArduinoOutput
   { led13 :: Bool
+  , led9  :: Bool
   }
  deriving Show
 
@@ -23,7 +24,7 @@ defaultArduinoInput = newMVar $ ArduinoInput
 
 defaultArduinoOutput :: IO (MVar ArduinoOutput)
 defaultArduinoOutput = newMVar $ 
-  ArduinoOutput { led13 = False }
+  ArduinoOutput { led13 = False, led9 = False }
 
 type ArduinoIRef = MVar ArduinoInput
 type ArduinoORef = MVar ArduinoOutput
@@ -32,20 +33,29 @@ type ArduinoORef = MVar ArduinoOutput
 -- polls the buttons and pushes the led values.
 arduinoThread :: ArduinoIRef -> ArduinoORef -> IO ThreadId
 arduinoThread refI refO = forkIO $
-  withArduino True "/dev/ttyUSB0" $ do
+  withArduino False "/dev/ttyUSB0" $ do
+    -- Inputs
     let led_13 = digital 13
-        digButtons = map digital buttonIndices
+        led_9  = digital 9
     setPinMode led_13 OUTPUT
-    mapM_ (`setPinMode` INPUT) digButtons
+    setPinMode led_9 OUTPUT
+
+    -- Outputs
+    let digButtons = map digital buttonIndices
+    -- mapM_ (`setPinMode` INPUT) digButtons
+
     forever $ do
       output <- liftIO $ readMVar refO
       -- liftIO $ print output
 
       digitalWrite led_13 (led13 output)
+      digitalWrite led_9 (led9 output)
+      -- analogWrite led_9 (led9 output)
       ---- Put outputs
 
       -- Read Inputs
-      bInputs <- mapM digitalRead digButtons
-      let input' = ArduinoInput bInputs
+      -- bInputs <- mapM digitalRead digButtons
+      -- let input' = ArduinoInput bInputs
       
-      void $ liftIO $ swapMVar refI input'
+      -- void $ liftIO $ swapMVar refI input'
+      return ()
